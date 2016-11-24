@@ -1,14 +1,6 @@
 BASE_COLOUR  = "\e[1;34m" # Light blue text on black
 
-module Printer
-
-  def special_print(movement, output, colour, *args)
-    prefix = args.empty? ? "" : args[0]
-    colour = "" unless colour
-    movement.times { print "\033[A"}
-    print "#{prefix}#{colour}#{output}\e[0m"
-  end
-end
+require_relative 'printer'
 
 class Game
   include Printer
@@ -61,14 +53,12 @@ class Game
     get_starter
   end
 
-  def clear_screen
-    RUBY_PLATFORM =~ /win32|win64|\.NET|windows|cygwin|mingw32/i ? system("cls") : system("clear")
-  end
+  
 
   def get_scoreboard
     max_name_length = @scores.keys.max { |a, b| a.length <=> b.length }.length
 
-    special_print(0, "#{" " * max_name_length} : Score\n", SCORE_COLOUR, "\n")
+    special_print(0, "#{" " * max_name_length} : Score\e[0m\n", SCORE_COLOUR, "\n")
 
     @scores.each do |player, score|
       special_print(0, "#{player.to_s.ljust(max_name_length)} : #{score}\n", SCORE_COLOUR)
@@ -227,21 +217,35 @@ class Board
   def get_robot_move
     sleep 1
     valid_moves = (1..9).to_a - @status.values.flatten
-
+    
+    robot    = @status.keys[@game.options[:turn]]
+    robot_moves = @status[robot].length > 1 ? @status[robot].permutation(2).to_a : @status[robot]
+    
     apponent = @status.keys[@game.options[:turn]^1]
     apponent_moves = @status[apponent].length > 1 ? @status[apponent].permutation(2).to_a : @status[apponent]
 
-    move = valid_moves.sample
-
+    move = nil
+    
     if [false, [true]*@game.options[:ai]].flatten.sample
-      apponent_moves.each do |p|
+      robot_moves.each do |p|
         if (CLOSE_WINS.keys.include? p) && (valid_moves.include? CLOSE_WINS[p])
           move = CLOSE_WINS[p]
           break
         end
       end
+      
+      if move.nil?
+        apponent_moves.each do |p|
+          if (CLOSE_WINS.keys.include? p) && (valid_moves.include? CLOSE_WINS[p])
+            move = CLOSE_WINS[p]
+            break
+          end
+        end
+      end
     end
-
+    
+    move = move.nil? ? valid_moves.sample : move
+    
     move
   end
 
@@ -250,7 +254,12 @@ class Board
     move = gets.chomp.to_i
 
     unless ((1..9).include? move) && !(@status.values.flatten.include? move)
-      special_print(0, "Invalid move #{move}!\n", BASE_COLOUR)
+      clear_screen
+      view = build
+      create(view)
+      special_print(0, "Invalid move #{move}!\n\e[K", BASE_COLOUR)
+      sleep 1.5
+      special_print(1, "", nil)
       move = false
     end
 
