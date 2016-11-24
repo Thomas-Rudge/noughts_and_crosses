@@ -1,15 +1,21 @@
-WINNING_GAMES = [[7, 8, 9], [4, 5, 6], [1, 2, 3], # Horizontal _7_|_8_|_9_
-                 [1, 4, 7], [2, 5, 8], [3, 6, 9], # Vertical   _4_|_5_|_6_
-                 [1, 5, 9], [3, 5, 7]]            # Diagonal    1 | 2 | 3
+BASE_COLOUR  = "\e[1;34m" # Light blue text on black
 
-CLOSE_WINS = {[1, 2]=>3, [2, 3]=>1, [4, 5]=>6, [5, 6]=>4, [7, 8]=>9, # Horizontal
-              [8, 9]=>7, [1, 3]=>2, [4, 6]=>5, [7, 9]=>8,
-              [1, 4]=>7, [4, 7]=>1, [2, 5]=>8, [5, 8]=>2, [3, 6]=>9, # Vertical
-              [6, 9]=>3, [1, 7]=>4, [2, 8]=>5, [3, 9]=>6,
-              [1, 5]=>9, [5, 9]=>1, [3, 5]=>7, [5, 7]=>3,            # Diagonal
-              [1, 9]=>5, [3, 7]=>5}
+module Printer
+
+  def special_print(movement, output, colour, *args)
+    prefix = args.empty? ? "" : args[0]
+    colour = "" unless colour
+    movement.times { print "\033[A"}
+    print "#{prefix}#{colour}#{output}\e[0m"
+  end
+end
 
 class Game
+  include Printer
+
+  SCORE_COLOUR = "\e[1;32m" # Light green text on black
+  WIN_COLOUR   = "\e[47m\e[2;31m" # Red text on black
+
   def initialize
     @affirmative = ["y", "yes", "yep", "sure", "ok", "okay"]
     @scores      = Hash.new
@@ -17,12 +23,13 @@ class Game
   end
 
   def start
-    puts "Would you like to play a game?"
-    print "\t>>"
+    special_print(0, "Would you like to play a game?\n", BASE_COLOUR)
+    special_print(0, ">>", BASE_COLOUR, "\t")
     response = gets.chomp.downcase.gsub(" ", "")
 
     if @affirmative.include? response
       setup
+      clear_screen
       go_to_board
     else
       finish
@@ -41,11 +48,11 @@ class Game
   end
 
   def replay?
-    puts "Would you like to play again?"
-    print ">>"
+    special_print(0, "Would you like to play again?\n", BASE_COLOUR)
+    special_print(0, ">>", BASE_COLOUR, "\t")
     response = gets.chomp.downcase.gsub(" ", "")
 
-    (@affirmative.include? response) ? go_to_board : finish
+    (@affirmative.include? response) ? (clear_screen; go_to_board) : finish
   end
 
   def setup
@@ -54,31 +61,35 @@ class Game
     get_starter
   end
 
+  def clear_screen
+    RUBY_PLATFORM =~ /win32|win64|\.NET|windows|cygwin|mingw32/i ? system("cls") : system("clear")
+  end
+
   def get_scoreboard
     max_name_length = @scores.keys.max { |a, b| a.length <=> b.length }.length
 
-    puts "\n#{" " * max_name_length} : Score"
+    special_print(0, "#{" " * max_name_length} : Score\n", SCORE_COLOUR, "\n")
 
     @scores.each do |player, score|
-      puts "#{player.to_s.ljust(max_name_length)} : #{score}"
+      special_print(0, "#{player.to_s.ljust(max_name_length)} : #{score}\n", SCORE_COLOUR)
     end
 
     unless @scores.values.inject(:+) == 0
       case
       when @scores[@scores.keys[0]] == @scores[@scores.keys[1]]
-        puts "\n\t~ Draw ~\n\n"
+        special_print(0, "~ Draw ~\n\n", WIN_COLOUR, "\n\t")
       when @scores[@scores.keys[0]] > @scores[@scores.keys[1]]
-        puts "\n\t#{@scores.keys[0]} is winning!\n\n"
+        special_print(0, "#{@scores.keys[0]} is winning!\n\n", WIN_COLOUR, "\n\t")
       when @scores[@scores.keys[0]] < @scores[@scores.keys[1]]
-        puts "\n\t#{@scores.keys[1]} is winning!\n\n"
+        special_print(0, "#{@scores.keys[1]} is winning!\n\n", WIN_COLOUR, "\n\t")
       end
     end
   end
 
   def get_players
     begin
-      puts "How many players?"
-      print "\t>>"
+      special_print(0, "How many players?\n", BASE_COLOUR)
+      special_print(0, ">>", BASE_COLOUR, "\t")
       response = gets.chomp
 
       unless ["0", "1", "2"].include? response
@@ -86,7 +97,7 @@ class Game
       end
 
     rescue StandardError
-      puts "This game supports 0 to 2 players"
+      special_print(0, "This game supports 0 to 2 players\n", WIN_COLOUR)
       retry
     else
       @options[:mode] = response.to_i
@@ -98,18 +109,18 @@ class Game
     when 0
       response = "y"
     when 1
-      puts "Do you want to go first?"
-      print "\t>>"
+      special_print(0, "Do you want to go first?\n", BASE_COLOUR)
+      special_print(0, ">>", BASE_COLOUR, "\t")
       response = gets.chomp.downcase.gsub(" ", "")
     when 2
-      puts "Which player is going first?"
-      print "\t>>"
+      special_print(0, "Which player is going first?\n", BASE_COLOUR)
+      special_print(0, ">>", BASE_COLOUR, "\t")
       response = gets.chomp.scan(/\d/)
 
       response = response.empty? ? ["1"] : response
       response = response[0] == "1" ? "y" : "n"
     else
-      puts "Error: bad value for mode:- #{@options[:mode]}!"
+      special_print(0, "Error: bad value for mode:- #{@options[:mode]}!\n", WIN_COLOUR)
     end
 
     @affirmative.include? response ? @options[:turn] = 0 : @options[:turn] = 1
@@ -120,22 +131,13 @@ class Game
     when 0 then @scores[:Robot2]  = @scores [:Robot1]  = 0
     when 1 then @scores[:Robot1]  = @scores [:Player1] = 0
     when 2 then @scores[:Player2] = @scores [:Player1] = 0
-    else puts "Error: get players before setting them"
+    else special_print(0, "Error: get players before setting them\n", WIN_COLOUR)
     end
-    puts
   end
 
   def finish
-    puts "Goodbye"
+    special_print(0, "Goodbye\n", nil)
     exit
-  end
-
-  def test
-    puts "Hi there"
-    print "How's it going?"
-    sleep 2
-    print "\r" + ("\e[A\e[K")
-    print "It's me again"
   end
 
   private :get_players, :get_starter, :set_players, :go_to_board
@@ -144,6 +146,21 @@ class Game
 end
 
 class Board
+  include Printer
+
+  BOARD_COLOUR = "\e[44m\e[1;32m" # Light blue text on blue
+
+  WINNING_GAMES = [[7, 8, 9], [4, 5, 6], [1, 2, 3], # Horizontal _7_|_8_|_9_
+                   [1, 4, 7], [2, 5, 8], [3, 6, 9], # Vertical   _4_|_5_|_6_
+                   [1, 5, 9], [3, 5, 7]]            # Diagonal    1 | 2 | 3
+
+  CLOSE_WINS = {[1, 2]=>3, [2, 3]=>1, [4, 5]=>6, [5, 6]=>4, [7, 8]=>9, # Horizontal
+                [8, 9]=>7, [1, 3]=>2, [4, 6]=>5, [7, 9]=>8,
+                [1, 4]=>7, [4, 7]=>1, [2, 5]=>8, [5, 8]=>2, [3, 6]=>9, # Vertical
+                [6, 9]=>3, [1, 7]=>4, [2, 8]=>5, [3, 9]=>6,
+                [1, 5]=>9, [5, 9]=>1, [3, 5]=>7, [5, 7]=>3,            # Diagonal
+                [1, 9]=>5, [3, 7]=>5}
+
   def initialize(game)
     @game = game
     @status = Hash.new
@@ -193,18 +210,18 @@ class Board
   end
 
   def create(moves)
-    top    = "   |   |   "
-    bottom = "___|___|___"
+    top    = "   |   |   \n"
+    bottom = "___|___|___\n"
 
-    puts top
-    puts " #{moves[6]} | #{moves[7]} | #{moves[8]} "
-    puts bottom
-    puts top
-    puts " #{moves[3]} | #{moves[4]} | #{moves[5]} "
-    puts bottom
-    puts top
-    puts " #{moves[0]} | #{moves[1]} | #{moves[2]} "
-    puts top
+    special_print(11, top, BOARD_COLOUR, "\t")
+    special_print(0, " #{moves[6]} | #{moves[7]} | #{moves[8]} \n", BOARD_COLOUR, "\t")
+    special_print(0, bottom, BOARD_COLOUR, "\t")
+    special_print(0, top, BOARD_COLOUR, "\t")
+    special_print(0, " #{moves[3]} | #{moves[4]} | #{moves[5]} \n", BOARD_COLOUR, "\t")
+    special_print(0, bottom, BOARD_COLOUR, "\t")
+    special_print(0, top, BOARD_COLOUR, "\t")
+    special_print(0, " #{moves[0]} | #{moves[1]} | #{moves[2]} \n", BOARD_COLOUR, "\t")
+    special_print(0, top, BOARD_COLOUR, "\t")
   end
 
   def get_robot_move
@@ -215,7 +232,7 @@ class Board
     apponent_moves = @status[apponent].length > 1 ? @status[apponent].permutation(2).to_a : @status[apponent]
 
     move = valid_moves.sample
-    
+
     if [false, [true]*@game.options[:ai]].flatten.sample
       apponent_moves.each do |p|
         if (CLOSE_WINS.keys.include? p) && (valid_moves.include? CLOSE_WINS[p])
@@ -229,11 +246,11 @@ class Board
   end
 
   def get_player_move
-    print "\t>>"
+    special_print(0, ">>", BASE_COLOUR, "\t")
     move = gets.chomp.to_i
 
     unless ((1..9).include? move) && !(@status.values.flatten.include? move)
-      puts "Invalid move #{move}!"
+      special_print(0, "Invalid move #{move}!\n", BASE_COLOUR)
       move = false
     end
 
@@ -243,7 +260,7 @@ class Board
   def turn
     success = true
     current_player = @status.keys[@game.options[:turn]]
-    puts "#{current_player} next move~"
+    special_print(0, "#{current_player} next move~\n", BASE_COLOUR)
     case @game.options[:mode]
     when 0
       @status[current_player] << get_robot_move
@@ -288,3 +305,4 @@ class Board
 
   attr_reader :status
 end
+
