@@ -11,6 +11,10 @@ class Game
   def initialize
     @affirmative = ["y", "yes", "yep", "sure", "ok", "okay"]
     @scores      = Hash.new
+    # mode    : 0-AI vs AI ; 1-Player vs AI ; 2-Player vs Player
+    # turn    : Tells the system whose go it is ; 0-Player1 ; 1-Player2
+    # charset : The characters used on the bord. Item 0 is used by Player 1
+    # ai      : The higher the number, the harder the ai. 0 turns ai off
     @options     = {mode: 0, turn: 0, charset: [:X, :O], ai: 2}
   end
 
@@ -35,7 +39,6 @@ class Game
     @scores[winner] += 1 unless winner.eql? false
 
     get_scoreboard
-
     replay?
   end
 
@@ -53,17 +56,16 @@ class Game
     get_starter
   end
 
-  
-
   def get_scoreboard
+    # We need this to ensure the aligment of values in the score table
     max_name_length = @scores.keys.max { |a, b| a.length <=> b.length }.length
-
+    # Now we print out the table header and scores
     special_print(0, "#{" " * max_name_length} : Score\e[0m\n", SCORE_COLOUR, "\n")
 
     @scores.each do |player, score|
       special_print(0, "#{player.to_s.ljust(max_name_length)} : #{score}\n", SCORE_COLOUR)
     end
-
+    # Detail who is winning unless no games have been played yet
     unless @scores.values.inject(:+) == 0
       case
       when @scores[@scores.keys[0]] == @scores[@scores.keys[1]]
@@ -105,13 +107,12 @@ class Game
     when 2
       special_print(0, "Which player is going first?\n", BASE_COLOUR)
       special_print(0, ">>", BASE_COLOUR, "\t")
-      response = gets.chomp.scan(/\d/)
-
-      response = response.empty? ? ["1"] : response
-      response = response[0] == "1" ? "y" : "n"
+      response = gets.chomp.scan(/\d/)[0]
     else
       special_print(0, "Error: bad value for mode:- #{@options[:mode]}!\n", WIN_COLOUR)
     end
+    # Account for non-responses, and player specific response
+    response = ([nil,"","1"].include? response) ? "y" : response
 
     @affirmative.include? response ? @options[:turn] = 0 : @options[:turn] = 1
   end
@@ -164,14 +165,16 @@ class Board
     state = false
 
     while true
+      # See if anybody has won
       state = check_status()
       if state.nil?
-        while true
+        while true # Because invalid moves happen
           this_turn = turn
           break if this_turn
         end
+        # It's the next players turn
         @game.options[:turn]  ^= 1
-
+        # Recreate the board with the new moves set
         view = build
         create(view)
       else
@@ -186,17 +189,17 @@ class Board
     users_char = Hash.new
     [0, 1].each { |i| users_char[@game.scores.keys[i]] = @game.options[:charset][i] }
 
-    moves = Array.new(9)
-
+    board = Array.new(9)
+    # This will add players moves to the board
     @status.each do |player, player_moves|
       (1..9).each do |i|
-        moves[i-1] = (player_moves.include? i) ? users_char[player] : moves[i-1]
+        board[i-1] = (player_moves.include? i) ? users_char[player] : board[i-1]
       end
     end
+    # Any empty spaces on the board should be a space instead of nil
+    board.map! { |x| x ? x : " " }
 
-    moves.map! { |x| x ? x : " " }
-
-    moves
+    board
   end
 
   def create(moves)
@@ -215,37 +218,34 @@ class Board
   end
 
   def get_robot_move
-    sleep 1
+    sleep 1 # Because super fast robots are scary
     valid_moves = (1..9).to_a - @status.values.flatten
-    
-    robot    = @status.keys[@game.options[:turn]]
+    # Get the robot and its moves so far
+    robot = @status.keys[@game.options[:turn]]
     robot_moves = @status[robot].length > 1 ? @status[robot].permutation(2).to_a : @status[robot]
-    
+    # Get the apponent and its moves so far
     apponent = @status.keys[@game.options[:turn]^1]
     apponent_moves = @status[apponent].length > 1 ? @status[apponent].permutation(2).to_a : @status[apponent]
 
     move = nil
-    
-    if [false, [true]*@game.options[:ai]].flatten.sample
-      robot_moves.each do |p|
-        if (CLOSE_WINS.keys.include? p) && (valid_moves.include? CLOSE_WINS[p])
-          move = CLOSE_WINS[p]
-          break
-        end
-      end
-      
-      if move.nil?
-        apponent_moves.each do |p|
+
+    if [false, false, [true]*@game.options[:ai]].flatten.sample
+      # Check whether the robot can win with a single move, if so make it
+      # If no winning move, check whether your apponent is about to win, and block them if so
+      [robot_moves, apponent_moves].each do |moves|
+        moves.each do |p|
           if (CLOSE_WINS.keys.include? p) && (valid_moves.include? CLOSE_WINS[p])
             move = CLOSE_WINS[p]
             break
           end
         end
+
+        break unless move.nil?
       end
     end
-    
+    # If the AI didn't make a move, then pick a random spot
     move = move.nil? ? valid_moves.sample : move
-    
+
     move
   end
 
