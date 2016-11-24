@@ -13,7 +13,8 @@ require 'noughts_and_crosses'
 
 game = Game.new
 
-```&nbsp;
+```
+&nbsp;
 
 ---
 ###Game Options
@@ -31,7 +32,8 @@ Default value is `2`
 
 ```ruby
 game.options[:ai] = 5
-```&nbsp;
+```
+&nbsp;
 
 ---
 ###Starting the Game
